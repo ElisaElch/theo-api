@@ -1,0 +1,35 @@
+{
+  "name": "theo-api",
+  "version": "1.0.0",
+  "description": "Express + TypeScript API for Theo, a personal memory book for cafés, restaurants and hotels.",
+ "main": "dist/server.js",
+"scripts": {
+  "dev": "tsx watch src/server.ts",
+  "build": "tsc",
+  "start": "node dist/server.js"
+},
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/ElisaElch/theo-api.git"
+  },
+  "keywords": [],
+  "author": "ElisaElch",
+  "license": "UNLICENSED",
+  "type": "module",
+  "bugs": {
+    "url": "https://github.com/ElisaElch/theo-api/issues"
+  },
+  "homepage": "https://github.com/ElisaElch/theo-api#readme",
+  "dependencies": {
+    "cors": "^2.8.6",
+    "dotenv": "^18.0.4",
+    "express": "^5.2.1"
+  },
+  "devDependencies": {
+    "@types/cors": "^2.8.19",
+    "@types/express": "^5.0.6",
+    "@types/node": "^26.6.3",
+    "tsx": "^4.23.15",
+    "typescript": "^7.0.2"
+  }
+}
