@@ -20,6 +20,11 @@ const userSchema = new Schema(
     passwordHash: { type: String, required: true, select: false },
     bio: { type: String, default: "", maxlength: 150 },
     location: { type: String, default: "" },
+    role: {
+      type: String,
+      enum: ["user", "admin", "superadmin"],
+      default: "user",
+    },
   },
   { timestamps: true },
 );
