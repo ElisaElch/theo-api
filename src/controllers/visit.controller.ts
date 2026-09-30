@@ -2,6 +2,7 @@ import type { RequestHandler } from "express";
 import { isValidObjectId } from "mongoose";
 import Place from "../models/Place.js";
 import Visit from "../models/Visit.js";
+import { deletePhotos } from "../utils/deletePhotos.js";
 import type { CreateVisitInput, UpdateVisitInput } from "../schemas/visit.schemas.js";
 
 type IdParams = { id: string };
@@ -90,20 +91,30 @@ export const updateVisit: RequestHandler<IdParams, unknown, UpdateVisitInput> = 
 ) => {
   const visit = await findMyVisit(req.params.id, req.user!.id);
 
+  // Remember the current photos, to spot which ones get removed
+  const oldPublicIds = visit.photos.map((photo) => photo.publicId);
+
   visit.set(req.body);
   checkVisitedHasDetails(visit); // checked after the changes, e.g. wantToGo → visited
   await visit.save();
-  await visit.populate("place");
 
+  // Photos that were on the visit before but aren't any more → delete from Cloudinary
+  if (req.body.photos) {
+    const newPublicIds = new Set(req.body.photos.map((photo) => photo.publicId));
+    await deletePhotos(oldPublicIds.filter((id) => !newPublicIds.has(id)));
+  }
+
+  await visit.populate("place");
   res.json({ visit });
 };
 
-// DELETE /api/visits/:id: remove the visit (the shared Place stays)
+// DELETE /api/visits/:id: remove the visit and its photos (the shared Place stays)
 export const deleteVisit: RequestHandler<IdParams> = async (req, res) => {
   const visit = await findMyVisit(req.params.id, req.user!.id);
+  const publicIds = visit.photos.map((photo) => photo.publicId);
 
-  // TODO (card 12): also delete this visit's photos from Cloudinary
   await visit.deleteOne();
+  await deletePhotos(publicIds); // after the visit is gone, so it never points at deleted photos
 
   res.status(204).end();
 };
