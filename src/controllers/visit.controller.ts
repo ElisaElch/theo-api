@@ -1,0 +1,109 @@
+import type { RequestHandler } from "express";
+import { isValidObjectId } from "mongoose";
+import Place from "../models/Place.js";
+import Visit from "../models/Visit.js";
+import type { CreateVisitInput, UpdateVisitInput } from "../schemas/visit.schemas.js";
+
+type IdParams = { id: string };
+
+// --- Helpers ---
+
+// A "visited" place needs a date and a rating. "Want to go" doesn't.
+function checkVisitedHasDetails(visit: {
+  status?: string | null;
+  visitDate?: Date | null;
+  rating?: number | null;
+}) {
+  if (visit.status === "visited" && (!visit.visitDate || !visit.rating)) {
+    throw new Error("A visited place needs a visit date and a rating", {
+      cause: { status: 400 },
+    });
+  }
+}
+
+// Finds one of the logged-in user's own visits, or throws 404.
+// Searching by _id AND user means other people's visits are never found.
+async function findMyVisit(id: string, userId: string) {
+  if (!isValidObjectId(id)) {
+    throw new Error("Invalid id", { cause: { status: 400 } });
+  }
+
+  const visit = await Visit.findOne({ _id: id, user: userId });
+
+  if (!visit) {
+    throw new Error("Visit not found", { cause: { status: 404 } });
+  }
+
+  return visit;
+}
+
+// --- Routes ---
+
+// POST /api/visits: save a place (find or create the Place, then create the Visit)
+export const createVisit: RequestHandler<unknown, unknown, CreateVisitInput> = async (req, res) => {
+  const { place: placeData, ...visitData } = req.body;
+  const userId = req.user!.id;
+
+  checkVisitedHasDetails(visitData);
+
+  // Find the shared Place by externalId, or create it if nobody has saved it yet.
+  // $setOnInsert only writes the details when creating, never over an existing place.
+  const place = await Place.findOneAndUpdate(
+    { externalId: placeData.externalId },
+    { $setOnInsert: placeData },
+    { upsert: true, returnDocument: "after" },
+  );
+
+  // One visit per user per place (for now)
+  const alreadySaved = await Visit.exists({ user: userId, place: place._id });
+  if (alreadySaved) {
+    throw new Error("You've already saved this place", { cause: { status: 409 } });
+  }
+
+  const visit = await Visit.create({ ...visitData, user: userId, place: place._id });
+  await visit.populate("place");
+
+  res.status(201).json({ visit });
+};
+
+// GET /api/visits: all of the logged-in user's visits, newest first
+export const getMyVisits: RequestHandler = async (req, res) => {
+  const visits = await Visit.find({ user: req.user!.id })
+    .populate("place")
+    .sort({ visitDate: -1, createdAt: -1 });
+
+  res.json({ visits });
+};
+
+// GET /api/visits/:id: one of the user's visits
+export const getVisit: RequestHandler<IdParams> = async (req, res) => {
+  const visit = await findMyVisit(req.params.id, req.user!.id);
+  await visit.populate("place");
+
+  res.json({ visit });
+};
+
+// PATCH /api/visits/:id: edit the visit (only the fields that were sent)
+export const updateVisit: RequestHandler<IdParams, unknown, UpdateVisitInput> = async (
+  req,
+  res,
+) => {
+  const visit = await findMyVisit(req.params.id, req.user!.id);
+
+  visit.set(req.body);
+  checkVisitedHasDetails(visit); // checked after the changes, e.g. wantToGo → visited
+  await visit.save();
+  await visit.populate("place");
+
+  res.json({ visit });
+};
+
+// DELETE /api/visits/:id: remove the visit (the shared Place stays)
+export const deleteVisit: RequestHandler<IdParams> = async (req, res) => {
+  const visit = await findMyVisit(req.params.id, req.user!.id);
+
+  // TODO (card 12): also delete this visit's photos from Cloudinary
+  await visit.deleteOne();
+
+  res.status(204).end();
+};
