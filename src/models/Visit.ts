@@ -9,6 +9,12 @@ const visitSchema = new Schema(
       required: true,
       index: true,
     },
+    // This person's own category for the place (brunch at a café, dinner at a restaurant).
+    // Not required, so older visits saved before this field existed still work.
+    type: {
+      type: String,
+      enum: ["cafe", "restaurant", "hotel"],
+    },
     status: {
       type: String,
       enum: ["visited", "wantToGo"],

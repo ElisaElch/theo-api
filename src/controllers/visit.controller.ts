@@ -6,6 +6,8 @@ import type { CreateVisitInput, UpdateVisitInput } from "../schemas/visit.schema
 import { deletePhotos } from "../utils/deletePhotos.js";
 
 type IdParams = { id: string };
+type VisitDoc = InstanceType<typeof Visit>;
+type PlaceType = "cafe" | "restaurant" | "hotel";
 
 // --- Helpers ---
 
@@ -32,6 +34,16 @@ function checkExceptionalHasReason(visit: {
       cause: { status: 400 },
     });
   }
+}
+
+// Older visits were saved before visits had their own type.
+// For those, show the place's type instead (only in the response, nothing is saved).
+function withVisitType(visit: VisitDoc): VisitDoc {
+  const place = visit.place as unknown as { type?: PlaceType } | null;
+  if (!visit.type && place?.type) {
+    visit.type = place.type;
+  }
+  return visit;
 }
 
 // Finds one of the logged-in user's own visits, or throws 404.
@@ -62,6 +74,7 @@ export const createVisit: RequestHandler<unknown, unknown, CreateVisitInput> = a
 
   // Find the shared Place by externalId, or create it if nobody has saved it yet.
   // $setOnInsert only writes the details when creating, never over an existing place.
+  // (The place's type is just a suggestion; each visit has its own type.)
   const place = await Place.findOneAndUpdate(
     { externalId: placeData.externalId },
     { $setOnInsert: placeData },
@@ -94,7 +107,11 @@ export const getMyVisits: RequestHandler = async (req, res) => {
     .populate("place")
     .sort({ visitDate: -1, createdAt: -1 });
 
-  res.json({ visits });
+  // Skip any visit whose place is missing (e.g. deleted by hand in the database),
+  // so one broken visit can't break the whole list
+  const validVisits = visits.filter((visit) => visit.place !== null).map(withVisitType);
+
+  res.json({ visits: validVisits });
 };
 
 // GET /api/visits/:id: one of the user's visits
@@ -102,7 +119,11 @@ export const getVisit: RequestHandler<IdParams> = async (req, res) => {
   const visit = await findMyVisit(req.params.id, req.user!.id);
   await visit.populate("place");
 
-  res.json({ visit });
+  if (visit.place === null) {
+    throw new Error("This place no longer exists", { cause: { status: 404 } });
+  }
+
+  res.json({ visit: withVisitType(visit) });
 };
 
 // PATCH /api/visits/:id: edit the visit (only the fields that were sent)
@@ -133,7 +154,7 @@ export const updateVisit: RequestHandler<IdParams, unknown, UpdateVisitInput> = 
   }
 
   await visit.populate("place");
-  res.json({ visit });
+  res.json({ visit: withVisitType(visit) });
 };
 
 // DELETE /api/visits/:id: remove the visit and its photos (the shared Place stays)

@@ -1,9 +1,12 @@
 import { z } from "zod";
 
-// Facts about the place, from the location search on the frontend
+const PLACE_TYPES = ["cafe", "restaurant", "hotel"] as const;
+
+// Facts about the place, from the location search on the frontend.
+// Its type is only a suggestion for future visitors (set by whoever saves it first).
 const placeSchema = z.object({
   externalId: z.string().min(1),
-  type: z.enum(["cafe", "restaurant", "hotel"]),
+  type: z.enum(PLACE_TYPES),
   name: z.string().trim().min(1, "Name is required").max(100),
   city: z.string().trim().min(1, "City is required").max(100),
   country: z.string().trim().min(1, "Country is required").max(100),
@@ -15,6 +18,7 @@ const placeSchema = z.object({
 
 // The personal part: someone's memory of the place
 const visitFields = {
+  type: z.enum(PLACE_TYPES).optional(), // if not sent, the place's type is used
   status: z.enum(["visited", "wantToGo"]).default("visited"),
   visitDate: z.coerce.date().optional(), // accepts "2025-03-12" and turns it into a Date
   rating: z.number().int().min(1).max(11).optional(), // 11 = exceptional star
