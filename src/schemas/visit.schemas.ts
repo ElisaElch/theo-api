@@ -17,7 +17,9 @@ const placeSchema = z.object({
 const visitFields = {
   status: z.enum(["visited", "wantToGo"]).default("visited"),
   visitDate: z.coerce.date().optional(), // accepts "2025-03-12" and turns it into a Date
-  rating: z.number().int().min(1).max(5).optional(),
+  rating: z.number().int().min(1).max(11).optional(), // 11 = exceptional star
+  exceptionalReason: z.string().trim().max(150).optional(),
+  isFavourite: z.boolean().optional(),
   whatIHad: z.string().trim().max(300).optional(),
   memory: z.string().trim().max(2000).optional(),
   tags: z.array(z.string().trim().min(1).max(30)).max(20).optional(),

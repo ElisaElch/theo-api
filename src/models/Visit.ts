@@ -15,7 +15,12 @@ const visitSchema = new Schema(
       default: "visited",
     },
     visitDate: { type: Date },
-    rating: { type: Number, min: 1, max: 5 },
+    // 1–10 stars, or 11 for an exceptional place ("beyond perfect")
+    rating: { type: Number, min: 1, max: 11 },
+    // Why it earned the 11th star, e.g. "Best chai latte I've ever had"
+    exceptionalReason: { type: String, default: "", trim: true },
+    // Separate from the rating: a place can be a favourite at any rating
+    isFavourite: { type: Boolean, default: false },
     whatIHad: { type: String, default: "", trim: true },
     memory: { type: String, default: "", trim: true },
     tags: { type: [String], default: [] },

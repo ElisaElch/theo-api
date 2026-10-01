@@ -2,8 +2,8 @@ import type { RequestHandler } from "express";
 import { isValidObjectId } from "mongoose";
 import Place from "../models/Place.js";
 import Visit from "../models/Visit.js";
-import { deletePhotos } from "../utils/deletePhotos.js";
 import type { CreateVisitInput, UpdateVisitInput } from "../schemas/visit.schemas.js";
+import { deletePhotos } from "../utils/deletePhotos.js";
 
 type IdParams = { id: string };
 
@@ -17,6 +17,18 @@ function checkVisitedHasDetails(visit: {
 }) {
   if (visit.status === "visited" && (!visit.visitDate || !visit.rating)) {
     throw new Error("A visited place needs a visit date and a rating", {
+      cause: { status: 400 },
+    });
+  }
+}
+
+// 11 stars needs a reason, so the extra star always means something
+function checkExceptionalHasReason(visit: {
+  rating?: number | null;
+  exceptionalReason?: string | null;
+}) {
+  if (visit.rating === 11 && !visit.exceptionalReason?.trim()) {
+    throw new Error("Tell us what made it exceptional to give it the 11th star", {
       cause: { status: 400 },
     });
   }
@@ -46,6 +58,7 @@ export const createVisit: RequestHandler<unknown, unknown, CreateVisitInput> = a
   const userId = req.user!.id;
 
   checkVisitedHasDetails(visitData);
+  checkExceptionalHasReason(visitData);
 
   // Find the shared Place by externalId, or create it if nobody has saved it yet.
   // $setOnInsert only writes the details when creating, never over an existing place.
@@ -61,7 +74,15 @@ export const createVisit: RequestHandler<unknown, unknown, CreateVisitInput> = a
     throw new Error("You've already saved this place", { cause: { status: 409 } });
   }
 
-  const visit = await Visit.create({ ...visitData, user: userId, place: place._id });
+  // Only 11-star visits keep a reason
+  const exceptionalReason = visitData.rating === 11 ? visitData.exceptionalReason : "";
+
+  const visit = await Visit.create({
+    ...visitData,
+    exceptionalReason,
+    user: userId,
+    place: place._id,
+  });
   await visit.populate("place");
 
   res.status(201).json({ visit });
@@ -96,6 +117,13 @@ export const updateVisit: RequestHandler<IdParams, unknown, UpdateVisitInput> = 
 
   visit.set(req.body);
   checkVisitedHasDetails(visit); // checked after the changes, e.g. wantToGo → visited
+  checkExceptionalHasReason(visit);
+
+  // Lowering the rating from 11 removes the reason, so it can't linger
+  if (visit.rating !== 11) {
+    visit.exceptionalReason = "";
+  }
+
   await visit.save();
 
   // Photos that were on the visit before but aren't any more → delete from Cloudinary
