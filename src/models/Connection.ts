@@ -14,6 +14,12 @@ const connectionSchema = new Schema(
       enum: ["pending", "accepted"],
       default: "pending",
     },
+    // Who has muted the other person. One-way: if A mutes B, B doesn't mute A.
+    // Muted friends stay friends, but their places don't show in your feed or map.
+    mutedBy: {
+      type: [{ type: Schema.Types.ObjectId, ref: "User" }],
+      default: [],
+    },
   },
   { timestamps: true },
 );
