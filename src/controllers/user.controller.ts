@@ -1,59 +1,17 @@
 import type { RequestHandler } from "express";
-import { isValidObjectId, type Types } from "mongoose";
+import { isValidObjectId } from "mongoose";
 import Connection from "../models/Connection.js";
 import User from "../models/User.js";
 import Visit from "../models/Visit.js";
 import { areFriends } from "../utils/friends.js";
+import { toFriendVisit, type PopulatedPlace, type VisitWithPlace } from "../utils/friendVisit.js";
 
 type IdParams = { id: string };
 type FriendVisitParams = { id: string; visitId: string };
-type PlaceType = "cafe" | "restaurant" | "hotel";
-
-// The place fields loaded alongside a friend's visit
-type PopulatedPlace = {
-  _id: Types.ObjectId;
-  name: string;
-  city: string;
-  country: string;
-  type: PlaceType;
-  coordinates: { lat: number; lng: number };
-};
-
-type VisitWithPlace = InstanceType<typeof Visit> & { place: PopulatedPlace };
 
 // "Daisy Smith" → "Daisy"
 function firstNameOf(name: string): string {
   return name.trim().split(/\s+/)[0];
-}
-
-// Builds what friends are allowed to see of a visit, field by field.
-// Dates (visitDate, createdAt, updatedAt) are deliberately left out:
-// friends never see WHEN someone was somewhere.
-function toFriendVisit(visit: VisitWithPlace) {
-  const { place } = visit;
-  return {
-    _id: visit._id.toString(),
-    place: {
-      _id: place._id.toString(),
-      name: place.name,
-      city: place.city,
-      country: place.country,
-      type: place.type,
-      coordinates: place.coordinates,
-    },
-    type: visit.type ?? place.type, // their own category
-    rating: visit.rating,
-    exceptionalReason: visit.exceptionalReason,
-    isFavourite: visit.isFavourite,
-    whatIHad: visit.whatIHad,
-    memory: visit.memory,
-    tags: visit.tags,
-    photos: visit.photos.map((photo) => ({
-      _id: photo._id.toString(),
-      url: photo.url,
-      publicId: photo.publicId,
-    })),
-  };
 }
 
 // Checks the friendship and loads the friend, or throws 404.
