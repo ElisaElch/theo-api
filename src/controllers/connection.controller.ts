@@ -7,13 +7,19 @@ import type { MuteInput, SendRequestInput } from "../schemas/connection.schemas.
 
 type IdParams = { id: string };
 
-// The user fields we load alongside a connection
-type PopulatedUser = { _id: Types.ObjectId; name: string; username: string };
+// The user fields we load alongside a connection.
+// name is the virtual, built from firstName and lastName (so both must be loaded).
+type PopulatedUser = {
+  _id: Types.ObjectId;
+  firstName: string;
+  lastName: string;
+  name: string;
+  username: string;
+  avatar?: { url?: string };
+};
 
-// "Daisy Smith" → "Daisy"
-function firstNameOf(name: string): string {
-  return name.trim().split(/\s+/)[0];
-}
+// Loaded for both people in a connection
+const USER_FIELDS = "firstName lastName username avatar";
 
 // How many places each of these users has saved, e.g. { "userId1": 12, "userId2": 3 }
 async function countPlaces(userIds: string[]): Promise<Record<string, number>> {
@@ -34,7 +40,10 @@ async function countPlaces(userIds: string[]): Promise<Record<string, number>> {
 }
 
 // POST /api/connections: send a friend request
-export const sendRequest: RequestHandler<unknown, unknown, SendRequestInput> = async (req, res) => {
+export const sendRequest: RequestHandler<unknown, unknown, SendRequestInput> = async (
+  req,
+  res,
+) => {
   const myId = req.user!.id;
   const otherId = req.body.userId;
 
@@ -83,7 +92,7 @@ export const listConnections: RequestHandler = async (req, res) => {
     $or: [{ requester: myId }, { recipient: myId }],
   }).populate<{ requester: PopulatedUser; recipient: PopulatedUser }>(
     "requester recipient",
-    "name username",
+    USER_FIELDS,
   );
 
   const friends = [];
@@ -98,10 +107,15 @@ export const listConnections: RequestHandler = async (req, res) => {
     if (!other) continue;
 
     if (connection.status === "accepted") {
-      // Friends see each other's full name. isMuted only says whether *I* muted them.
+      // Friends see each other's full name and photo. isMuted only says whether *I* muted them.
       friends.push({
         connectionId: connection._id.toString(),
-        user: { id: other._id.toString(), name: other.name, username: other.username },
+        user: {
+          id: other._id.toString(),
+          name: other.name,
+          username: other.username,
+          avatarUrl: other.avatar?.url ?? null,
+        },
         isMuted: connection.mutedBy.some((id) => id.toString() === myId),
       });
     } else if (sentByMe) {
@@ -110,15 +124,20 @@ export const listConnections: RequestHandler = async (req, res) => {
         connectionId: connection._id.toString(),
         user: {
           id: other._id.toString(),
-          firstName: firstNameOf(other.name),
+          firstName: other.firstName,
           username: other.username,
         },
       });
     } else {
-      // Requests sent to me: full name, so I can be sure who it is
+      // Requests sent to me: full name and photo, so I can be sure who it is
       incoming.push({
         connectionId: connection._id.toString(),
-        user: { id: other._id.toString(), name: other.name, username: other.username },
+        user: {
+          id: other._id.toString(),
+          name: other.name,
+          username: other.username,
+          avatarUrl: other.avatar?.url ?? null,
+        },
       });
     }
   }

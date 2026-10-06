@@ -1,18 +1,20 @@
+import fs from "node:fs/promises";
 import type { RequestHandler } from "express";
 import { isValidObjectId } from "mongoose";
+import cloudinary from "../config/cloudinary.js";
 import Connection from "../models/Connection.js";
 import User from "../models/User.js";
 import Visit from "../models/Visit.js";
+import { deletePhotos } from "../utils/deletePhotos.js";
 import { areFriends } from "../utils/friends.js";
-import { toFriendVisit, type PopulatedPlace, type VisitWithPlace } from "../utils/friendVisit.js";
+import {
+  toFriendVisit,
+  type PopulatedPlace,
+  type VisitWithPlace,
+} from "../utils/friendVisit.js";
 
 type IdParams = { id: string };
 type FriendVisitParams = { id: string; visitId: string };
-
-// "Daisy Smith" → "Daisy"
-function firstNameOf(name: string): string {
-  return name.trim().split(/\s+/)[0];
-}
 
 // Checks the friendship and loads the friend, or throws 404.
 // Same message whether they don't exist or just aren't your friend,
@@ -31,7 +33,12 @@ async function findFriend(myId: string, friendId: string) {
     throw new Error("Profile not found", { cause: { status: 404 } });
   }
 
-  return { id: friend._id.toString(), name: friend.name, username: friend.username };
+  return {
+    id: friend._id.toString(),
+    name: friend.name, // the virtual: first and last name
+    username: friend.username,
+    avatarUrl: friend.avatar?.url ?? null,
+  };
 }
 
 // GET /api/users/search?username=theotravels
@@ -72,7 +79,7 @@ export const searchUser: RequestHandler = async (req, res) => {
     user: {
       id: found._id.toString(),
       username: found.username,
-      firstName: firstNameOf(found.name),
+      firstName: found.firstName,
     },
     isYou,
     connection: connection
@@ -83,6 +90,47 @@ export const searchUser: RequestHandler = async (req, res) => {
         }
       : null,
   });
+};
+
+// PUT /api/users/me/avatar: upload or replace MY profile photo (requires parsePhotos)
+export const updateAvatar: RequestHandler = async (req, res) => {
+  const files = req.photoFiles ?? [];
+  const myId = req.user!.id;
+
+  try {
+    // parsePhotos guarantees at least one image; only the first is used
+    const result = await cloudinary.uploader.upload(files[0].filepath, {
+      folder: `theo/${myId}`,
+      // A 400×400 square, centred on a face if Cloudinary finds one
+      transformation: [{ width: 400, height: 400, crop: "fill", gravity: "face", quality: "auto" }],
+    });
+
+    const newAvatar = { url: result.secure_url, publicId: result.public_id };
+
+    // returnDocument "before" gives back the user as it was BEFORE the update,
+    // so we know which old photo to delete
+    const before = await User.findByIdAndUpdate(
+      myId,
+      { avatar: newAvatar },
+      { returnDocument: "before" },
+    );
+
+    // The account no longer exists: remove the photo we just uploaded
+    if (!before) {
+      await deletePhotos([newAvatar.publicId]);
+      throw new Error("User not found", { cause: { status: 404 } });
+    }
+
+    // Replaced an old photo: delete it from Cloudinary so it doesn't use up storage
+    if (before.avatar?.publicId) {
+      await deletePhotos([before.avatar.publicId]);
+    }
+
+    res.json({ avatarUrl: newAvatar.url });
+  } finally {
+    // Always delete the temporary files, even if the upload failed
+    await Promise.all(files.map((file) => fs.unlink(file.filepath).catch(() => {})));
+  }
 };
 
 // GET /api/users/:id/visits: all of a FRIEND's places, best-rated first
