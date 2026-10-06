@@ -8,6 +8,7 @@ import notFoundHandler from "./middleware/notFoundHandler.js";
 import errorHandler from "./middleware/errorHandler.js";
 import userRoutes from "./routes/user.routes.js";
 import connectionRoutes from "./routes/connection.routes.js";
+import feedRoutes from "./routes/feed.routes.js";
 
 const app = express();
 
@@ -31,6 +32,7 @@ app.use("/api/visits", visitRoutes);
 app.use("/api/uploads", uploadRoutes);
 app.use("/api/users", userRoutes);
 app.use("/api/connections", connectionRoutes);
+app.use("/api/feed", feedRoutes);
 
 // --- Error handling (must come after all routes) ---
 app.use(notFoundHandler); // no route matched → 404
