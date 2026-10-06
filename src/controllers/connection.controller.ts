@@ -1,7 +1,8 @@
 import type { RequestHandler } from "express";
-import { isValidObjectId, type Types } from "mongoose";
+import { isValidObjectId, Types } from "mongoose";
 import Connection from "../models/Connection.js";
 import User from "../models/User.js";
+import Visit from "../models/Visit.js";
 import type { MuteInput, SendRequestInput } from "../schemas/connection.schemas.js";
 
 type IdParams = { id: string };
@@ -12,6 +13,24 @@ type PopulatedUser = { _id: Types.ObjectId; name: string; username: string };
 // "Daisy Smith" → "Daisy"
 function firstNameOf(name: string): string {
   return name.trim().split(/\s+/)[0];
+}
+
+// How many places each of these users has saved, e.g. { "userId1": 12, "userId2": 3 }
+async function countPlaces(userIds: string[]): Promise<Record<string, number>> {
+  if (userIds.length === 0) return {};
+
+  // One database query for everyone: group their visits by user and count them
+  const counts = await Visit.aggregate<{ _id: Types.ObjectId; count: number }>([
+    {
+      $match: {
+        user: { $in: userIds.map((id) => new Types.ObjectId(id)) },
+        status: "visited",
+      },
+    },
+    { $group: { _id: "$user", count: { $sum: 1 } } },
+  ]);
+
+  return Object.fromEntries(counts.map((row) => [row._id.toString(), row.count]));
 }
 
 // POST /api/connections: send a friend request
@@ -104,7 +123,14 @@ export const listConnections: RequestHandler = async (req, res) => {
     }
   }
 
-  res.json({ friends, incoming, outgoing });
+  // Add each friend's number of places (for "Emma · 48 places")
+  const placeCounts = await countPlaces(friends.map((friend) => friend.user.id));
+  const friendsWithCounts = friends.map((friend) => ({
+    ...friend,
+    placeCount: placeCounts[friend.user.id] ?? 0,
+  }));
+
+  res.json({ friends: friendsWithCounts, incoming, outgoing });
 };
 
 // PATCH /api/connections/:id/accept: accept a request sent TO me
