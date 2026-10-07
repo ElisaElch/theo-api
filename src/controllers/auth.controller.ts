@@ -9,12 +9,15 @@ import { clearAuthCookie, setAuthCookie, signToken } from "../utils/authToken.js
 function toPublicUser(user: InstanceType<typeof User>) {
   return {
     id: user._id.toString(),
-    name: user.name,
+    firstName: user.firstName,
+    lastName: user.lastName,
+    name: user.name, // the virtual: first and last name joined
     username: user.username,
     email: user.email,
     role: user.role,
     bio: user.bio,
     location: user.location,
+    avatarUrl: user.avatar?.url ?? null, // null means no photo yet
   };
 }
 
@@ -26,14 +29,24 @@ function logUserIn(res: Parameters<RequestHandler>[1], user: InstanceType<typeof
 
 // POST /api/auth/register
 export const register: RequestHandler<unknown, unknown, RegisterInput> = async (req, res) => {
-  const { name, username, email, password } = req.body;
+  // termsAccepted isn't picked out: Zod has already checked it's true
+  const { firstName, lastName, username, email, password, location, bio } = req.body;
 
   // Hash the password. 12 is the "cost": higher means slower to crack, but slower to log in.
   const passwordHash = await bcrypt.hash(password, 12);
 
   // A taken username or email throws a duplicate key error,
   // which the error handler turns into a 409 response
-  const user = await User.create({ name, username, email, passwordHash });
+  const user = await User.create({
+    firstName,
+    lastName,
+    username,
+    email,
+    passwordHash,
+    location,
+    bio,
+    termsAcceptedAt: new Date(), // the server's clock records when they agreed
+  });
 
   // Log them in straight away, so they don't have to log in after signing up
   logUserIn(res, user);
