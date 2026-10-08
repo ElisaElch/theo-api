@@ -113,3 +113,28 @@ export const getActivityGroups: RequestHandler = async (req, res) => {
   // Only the newest few groups; the day keys are dropped, so no dates leave the server
   res.json({ groups: [...groups.values()].slice(0, MAX_GROUPS) });
 };
+
+// GET /api/feed/map: ALL of your friends' places, for the Map page.
+// Muted friends are left out. No dates are sent, as everywhere friends' places appear.
+export const getFriendsMapPlaces: RequestHandler = async (req, res) => {
+  const friendIds = await getFriendIds(req.user!.id, { excludeMuted: true });
+
+  if (friendIds.length === 0) {
+    res.json({ places: [] });
+    return;
+  }
+
+  const visits = await Visit.find({ user: { $in: friendIds }, status: "visited" })
+    .populate<{ place: PopulatedPlace | null }>("place")
+    .populate<{ user: PopulatedUser | null }>("user", USER_FIELDS);
+
+  const places = visits
+    // Skip anything whose place or user no longer exists
+    .filter((visit) => visit.place !== null && visit.user !== null)
+    .map((visit) => ({
+      friend: toFeedFriend(visit.user!),
+      visit: toFriendVisit(visit as unknown as VisitWithPlace),
+    }));
+
+  res.json({ places });
+};
