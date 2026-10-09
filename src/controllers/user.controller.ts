@@ -5,6 +5,7 @@ import cloudinary from "../config/cloudinary.js";
 import Connection from "../models/Connection.js";
 import User from "../models/User.js";
 import Visit from "../models/Visit.js";
+import type { UpdateProfileInput } from "../schemas/user.schemas.js";
 import { deletePhotos } from "../utils/deletePhotos.js";
 import { areFriends } from "../utils/friends.js";
 import {
@@ -12,6 +13,7 @@ import {
   type PopulatedPlace,
   type VisitWithPlace,
 } from "../utils/friendVisit.js";
+import { toPublicUser } from "../utils/publicUser.js";
 
 type IdParams = { id: string };
 type FriendVisitParams = { id: string; visitId: string };
@@ -92,6 +94,25 @@ export const searchUser: RequestHandler = async (req, res) => {
   });
 };
 
+// PATCH /api/users/me: change MY name, home city or bio (requires validateBody)
+export const updateProfile: RequestHandler<unknown, unknown, UpdateProfileInput> = async (
+  req,
+  res,
+) => {
+  // Only the fields that were sent are changed; validateBody has already
+  // removed anything else (username, email, role...)
+  const user = await User.findByIdAndUpdate(req.user!.id, req.body, {
+    returnDocument: "after", // give back the user AFTER the change
+    runValidators: true, // apply the model's rules too, e.g. the bio's 150-character limit
+  });
+
+  if (!user) {
+    throw new Error("User not found", { cause: { status: 404 } });
+  }
+
+  res.json({ user: toPublicUser(user) });
+};
+
 // PUT /api/users/me/avatar: upload or replace MY profile photo (requires parsePhotos)
 export const updateAvatar: RequestHandler = async (req, res) => {
   const files = req.photoFiles ?? [];
@@ -131,6 +152,26 @@ export const updateAvatar: RequestHandler = async (req, res) => {
     // Always delete the temporary files, even if the upload failed
     await Promise.all(files.map((file) => fs.unlink(file.filepath).catch(() => {})));
   }
+};
+
+// DELETE /api/users/me/avatar: remove MY profile photo (back to the letter circle)
+export const removeAvatar: RequestHandler = async (req, res) => {
+  // $unset removes the avatar field completely; "before" tells us which photo to delete
+  const before = await User.findByIdAndUpdate(
+    req.user!.id,
+    { $unset: { avatar: 1 } },
+    { returnDocument: "before" },
+  );
+
+  if (!before) {
+    throw new Error("User not found", { cause: { status: 404 } });
+  }
+
+  if (before.avatar?.publicId) {
+    await deletePhotos([before.avatar.publicId]);
+  }
+
+  res.json({ avatarUrl: null });
 };
 
 // GET /api/users/:id/visits: all of a FRIEND's places, best-rated first

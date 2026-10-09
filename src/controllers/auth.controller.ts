@@ -4,22 +4,9 @@ import User from "../models/User.js";
 import type { LoginInput, RegisterInput } from "../schemas/auth.schemas.js";
 import type { Role } from "../types/express.js";
 import { clearAuthCookie, setAuthCookie, signToken } from "../utils/authToken.js";
+import { toPublicUser } from "../utils/publicUser.js";
 
-// The user data we send to the frontend. Never includes the password hash.
-function toPublicUser(user: InstanceType<typeof User>) {
-  return {
-    id: user._id.toString(),
-    firstName: user.firstName,
-    lastName: user.lastName,
-    name: user.name, // the virtual: first and last name joined
-    username: user.username,
-    email: user.email,
-    role: user.role,
-    bio: user.bio,
-    location: user.location,
-    avatarUrl: user.avatar?.url ?? null, // null means no photo yet
-  };
-}
+
 
 // Creates the token and puts it in the login cookie
 function logUserIn(res: Parameters<RequestHandler>[1], user: InstanceType<typeof User>) {
