@@ -16,11 +16,21 @@ const placeSchema = z.object({
   }),
 });
 
+// Visit dates can't be in the future. One day of leeway, so someone in a time zone
+// that's already "tomorrow" (e.g. New Zealand) can still save today's date.
+const ONE_DAY_MS = 24 * 60 * 60 * 1000;
+
 // The personal part: someone's memory of the place
 const visitFields = {
   type: z.enum(PLACE_TYPES).optional(), // if not sent, the place's type is used
   status: z.enum(["visited", "wantToGo"]).default("visited"),
-  visitDate: z.coerce.date().optional(), // accepts "2025-03-12" and turns it into a Date
+  // Accepts "2025-03-12" and turns it into a Date; rejects dates in the future
+  visitDate: z.coerce
+    .date()
+    .refine((date) => date.getTime() <= Date.now() + ONE_DAY_MS, {
+      error: "The visit date can't be in the future",
+    })
+    .optional(),  
   rating: z.number().int().min(1).max(11).optional(), // 11 = exceptional star
   exceptionalReason: z.string().trim().max(150).optional(),
   isFavourite: z.boolean().optional(),
