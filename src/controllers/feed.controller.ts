@@ -1,38 +1,16 @@
 import type { RequestHandler } from "express";
-import type { Types } from "mongoose";
 import Visit from "../models/Visit.js";
 import { getFriendIds } from "../utils/friends.js";
+import { toFeedFriend, USER_FIELDS, type PopulatedUser } from "../utils/feedFriend.js";
 import {
   toFriendVisit,
   type PopulatedPlace,
   type VisitWithPlace,
 } from "../utils/friendVisit.js";
 
-// The user fields loaded with each visit.
-// name is the virtual, built from firstName and lastName (so both must be loaded).
-type PopulatedUser = {
-  _id: Types.ObjectId;
-  firstName: string;
-  lastName: string;
-  name: string;
-  username: string;
-  avatar?: { url?: string };
-};
-
-const USER_FIELDS = "firstName lastName username avatar";
 const FEED_LIMIT = 30; // most recent 30 places
 const WEEK_MS = 7 * 24 * 60 * 60 * 1000; // one week in milliseconds
 const MAX_GROUPS = 6; // the dashboard shows the newest few
-
-// What the browser gets to know about the friend who saved a place
-function toFeedFriend(friend: PopulatedUser) {
-  return {
-    id: friend._id.toString(),
-    name: friend.name,
-    username: friend.username,
-    avatarUrl: friend.avatar?.url ?? null,
-  };
-}
 
 // GET /api/feed: places your friends have saved recently, newest first.
 // Muted friends are left out. No timestamps are sent: the order shows

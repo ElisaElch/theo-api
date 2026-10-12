@@ -4,6 +4,8 @@ import Place from "../models/Place.js";
 import Visit from "../models/Visit.js";
 import type { CreateVisitInput, UpdateVisitInput } from "../schemas/visit.schemas.js";
 import { deletePhotos } from "../utils/deletePhotos.js";
+import { getFriendIds } from "../utils/friends.js";
+import { toFeedFriend, USER_FIELDS, type PopulatedUser } from "../utils/feedFriend.js";
 
 type IdParams = { id: string };
 type VisitDoc = InstanceType<typeof Visit>;
@@ -166,4 +168,41 @@ export const deleteVisit: RequestHandler<IdParams> = async (req, res) => {
   await deletePhotos(publicIds); // after the visit is gone, so it never points at deleted photos
 
   res.status(204).end();
+};
+
+// GET /api/visits/:id/friends: friends who have also visited the place of this visit.
+// Only "visited" (not "want to go"), muted friends left out, and no dates or ratings:
+// just who they are, plus their visit id so the page can link to it.
+export const getFriendsWhoVisited: RequestHandler<IdParams> = async (req, res) => {
+  const userId = req.user!.id;
+
+  // Must be your own visit: this also checks the id is valid (400) and exists (404)
+  const visit = await findMyVisit(req.params.id, userId);
+
+  const friendIds = await getFriendIds(userId, { excludeMuted: true });
+
+  // No friends (or all muted): nothing to show, and no need to query visits
+  if (friendIds.length === 0) {
+    res.json({ friends: [] });
+    return;
+  }
+
+  const friendVisits = await Visit.find({
+    place: visit.place, // the same shared Place
+    user: { $in: friendIds },
+    status: "visited",
+  })
+    .select("user") // only who visited, nothing else from their visit
+    .populate<{ user: PopulatedUser | null }>("user", USER_FIELDS)
+    .sort({ createdAt: -1 }); // newest first (for the order only, never sent)
+
+  const friends = friendVisits
+    // Skip any visit whose user no longer exists
+    .filter((friendVisit) => friendVisit.user !== null)
+    .map((friendVisit) => ({
+      friend: toFeedFriend(friendVisit.user!),
+      visitId: friendVisit._id.toString(),
+    }));
+
+  res.json({ friends });
 };
