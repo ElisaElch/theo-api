@@ -2,6 +2,7 @@ import { Router } from "express";
 import {
   createVisit,
   deleteVisit,
+   getFriendsWhoVisited,
   getMyVisits,
   getVisit,
   updateVisit,
@@ -17,6 +18,9 @@ const visitRoutes = Router();
 visitRoutes.use(authenticate);
 
 visitRoutes.route("/").get(getMyVisits).post(validateBody(createVisitSchema), createVisit);
+
+// Friends who have also visited this place
+visitRoutes.get("/:id/friends", getFriendsWhoVisited);
 
 visitRoutes
   .route("/:id")
