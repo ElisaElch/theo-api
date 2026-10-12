@@ -9,6 +9,7 @@ import errorHandler from "./middleware/errorHandler.js";
 import userRoutes from "./routes/user.routes.js";
 import connectionRoutes from "./routes/connection.routes.js";
 import feedRoutes from "./routes/feed.routes.js";
+import placeRoutes from "./routes/place.routes.js";
 
 const app = express();
 
@@ -29,6 +30,7 @@ app.get("/api/health", (_req, res) => {
 
 app.use("/api/auth", authRoutes);
 app.use("/api/visits", visitRoutes);
+app.use("/api/places", placeRoutes);
 app.use("/api/uploads", uploadRoutes);
 app.use("/api/users", userRoutes);
 app.use("/api/connections", connectionRoutes);
