@@ -11,6 +11,10 @@ type IdParams = { id: string };
 type VisitDoc = InstanceType<typeof Visit>;
 type PlaceType = "cafe" | "restaurant" | "hotel";
 
+// What your own places show about the friend you saved them from ("From Lena").
+// Only the avatar's url, not its Cloudinary id.
+const SAVED_FROM_FIELDS = "firstName username avatar.url";
+
 // --- Helpers ---
 
 // A "visited" place needs a date and a rating. "Want to go" doesn't.
@@ -107,6 +111,7 @@ export const createVisit: RequestHandler<unknown, unknown, CreateVisitInput> = a
 export const getMyVisits: RequestHandler = async (req, res) => {
   const visits = await Visit.find({ user: req.user!.id })
     .populate("place")
+    .populate("savedFrom", SAVED_FROM_FIELDS) // the friend it came from, if any
     .sort({ visitDate: -1, createdAt: -1 });
 
   // Skip any visit whose place is missing (e.g. deleted by hand in the database),
@@ -119,7 +124,7 @@ export const getMyVisits: RequestHandler = async (req, res) => {
 // GET /api/visits/:id: one of the user's visits
 export const getVisit: RequestHandler<IdParams> = async (req, res) => {
   const visit = await findMyVisit(req.params.id, req.user!.id);
-  await visit.populate("place");
+  await visit.populate(["place", { path: "savedFrom", select: SAVED_FROM_FIELDS }]);
 
   if (visit.place === null) {
     throw new Error("This place no longer exists", { cause: { status: 404 } });
@@ -155,7 +160,7 @@ export const updateVisit: RequestHandler<IdParams, unknown, UpdateVisitInput> = 
     await deletePhotos(oldPublicIds.filter((id) => !newPublicIds.has(id)));
   }
 
-  await visit.populate("place");
+  await visit.populate(["place", { path: "savedFrom", select: SAVED_FROM_FIELDS }]);
   res.json({ visit: withVisitType(visit) });
 };
 

@@ -52,8 +52,11 @@ const visitSchema = new Schema(
         },
       ],
       default: [],
+    },
+    // "Want to go" places saved from a friend's place: who it came from
+    // ("whose recommendation was it?"). Only ever set by the server.
+    savedFrom: { type: Schema.Types.ObjectId, ref: "User" },
   },
-},
   { timestamps: true },
 );
 
