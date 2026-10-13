@@ -259,6 +259,7 @@ export const saveFriendPlace: RequestHandler<
     type: friendVisit.type ?? friendVisit.place.type,
     status: "wantToGo",
     wantToGoNote: req.body.wantToGoNote ?? "",
+    savedFrom: friend.id, // whose recommendation it was
   });
 
   res.status(201).json({ myVisit: { id: visit._id.toString(), status: visit.status } });
