@@ -23,7 +23,7 @@ const ONE_DAY_MS = 24 * 60 * 60 * 1000;
 // The personal part: someone's memory of the place
 const visitFields = {
   type: z.enum(PLACE_TYPES).optional(), // if not sent, the place's type is used
-  status: z.enum(["visited", "wantToGo"]).default("visited"),
+  status: z.enum(["visited", "wantToGo"]).optional(), // the default is set in createVisitSchema only
   // Accepts "2025-03-12" and turns it into a Date; rejects dates in the future
   visitDate: z.coerce
     .date()
@@ -57,10 +57,15 @@ const visitFields = {
     .optional(),
 };
 
+
+
 // POST /api/visits: place details + visit details
 export const createVisitSchema = z.object({
   place: placeSchema,
   ...visitFields,
+   // New places are "visited" unless said otherwise. Only here: an edit that doesn't
+  // send a status must leave it as it is.
+  status: z.enum(["visited", "wantToGo"]).default("visited"),
 });
 
 // PATCH /api/visits/:id: only visit details, every field optional.
