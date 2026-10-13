@@ -42,6 +42,19 @@ const visitFields = {
     .max(12)
     .optional(),
   sourceUrl: z.url().optional(),
+    wantToGoNote: z.string().trim().max(300).optional(),
+  // Only http(s) links: blocks things like "javascript:..." that would run code when clicked
+  links: z
+    .array(
+      z.object({
+        url: z.url({
+          protocol: /^https?$/,
+          error: "Links must start with https:// or http://",
+        }),
+      }),
+    )
+    .max(5)
+    .optional(),
 };
 
 // POST /api/visits: place details + visit details
@@ -54,5 +67,12 @@ export const createVisitSchema = z.object({
 // The place itself can't be edited, because it's shared with other users.
 export const updateVisitSchema = z.object(visitFields).partial();
 
+// POST /api/users/:id/visits/:visitId/want-to-go: save a friend's place to MY Want to go list.
+// Only the optional note is sent; the place comes from the friend's visit on the server.
+export const saveFriendPlaceSchema = z.object({
+  wantToGoNote: z.string().trim().max(300).optional(),
+});
+
 export type CreateVisitInput = z.infer<typeof createVisitSchema>;
 export type UpdateVisitInput = z.infer<typeof updateVisitSchema>;
+export type SaveFriendPlaceInput = z.infer<typeof saveFriendPlaceSchema>;

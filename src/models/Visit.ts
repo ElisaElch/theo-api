@@ -40,7 +40,20 @@ const visitSchema = new Schema(
       default: [],
     },
     sourceUrl: { type: String, trim: true },
+    // "Want to go" only: why you want to go, e.g. "Lena says the cardamom buns are amazing".
+    // Kept when the place is later marked as visited.
+    wantToGoNote: { type: String, default: "", trim: true },
+    // Links about the place (an Instagram reel, Google Maps...). Stored as a list
+    // from the start, so allowing more than one link later needs no database changes.
+    links: {
+      type: [
+        {
+          url: { type: String, required: true, trim: true },
+        },
+      ],
+      default: [],
   },
+},
   { timestamps: true },
 );
 

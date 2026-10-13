@@ -2,6 +2,7 @@ import { Router } from "express";
 import {
   getFriendVisit,
   getFriendVisits,
+  saveFriendPlace,
   removeAvatar,
   searchUser,
   updateAvatar,
@@ -11,6 +12,7 @@ import authenticate from "../middleware/authenticate.js";
 import parsePhotos from "../middleware/parsePhotos.js";
 import validateBody from "../middleware/validateBody.js";
 import { updateProfileSchema } from "../schemas/user.schemas.js";
+import { saveFriendPlaceSchema } from "../schemas/visit.schemas.js";
 
 // Mounted under /api/users in app.ts
 const userRoutes = Router();
@@ -28,5 +30,12 @@ userRoutes.delete("/me/avatar", removeAvatar); // remove my profile photo
 // Friends' places
 userRoutes.get("/:id/visits", getFriendVisits); // all of a friend's places
 userRoutes.get("/:id/visits/:visitId", getFriendVisit); // one of a friend's places
+
+// Save a friend's place to MY Want to go list
+userRoutes.post(
+  "/:id/visits/:visitId/want-to-go",
+  validateBody(saveFriendPlaceSchema),
+  saveFriendPlace,
+);
 
 export default userRoutes;
