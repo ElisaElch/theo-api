@@ -6,6 +6,7 @@ import Connection from "../models/Connection.js";
 import User from "../models/User.js";
 import Visit from "../models/Visit.js";
 import type { UpdateProfileInput } from "../schemas/user.schemas.js";
+import type { SaveFriendPlaceInput } from "../schemas/visit.schemas.js";
 import { deletePhotos } from "../utils/deletePhotos.js";
 import { areFriends } from "../utils/friends.js";
 import {
@@ -208,5 +209,57 @@ export const getFriendVisit: RequestHandler<FriendVisitParams> = async (req, res
     throw new Error("Place not found", { cause: { status: 404 } });
   }
 
-  res.json({ friend, visit: toFriendVisit(visit as VisitWithPlace) });
+  // Do I already have this place myself? Lets the page show
+  // "I want to go here", "On your Want to go list" or "You've been here"
+  const mine = await Visit.findOne({ user: req.user!.id, place: visit.place._id }).select(
+    "status",
+  );
+
+  res.json({
+    friend,
+    visit: toFriendVisit(visit as VisitWithPlace),
+    myVisit: mine ? { id: mine._id.toString(), status: mine.status } : null,
+  });};
+
+  // POST /api/users/:id/visits/:visitId/want-to-go: save a FRIEND's place to MY Want to go list.
+// Only the place and their category are taken over. Never their rating, memory,
+// photos or tags: those are theirs.
+export const saveFriendPlace: RequestHandler<
+  FriendVisitParams,
+  unknown,
+  SaveFriendPlaceInput
+> = async (req, res) => {
+  const myId = req.user!.id;
+  const friend = await findFriend(myId, req.params.id);
+
+  if (!isValidObjectId(req.params.visitId)) {
+    throw new Error("Invalid id", { cause: { status: 400 } });
+  }
+
+  // Same check as getFriendVisit: it must be this friend's visited place
+  const friendVisit = await Visit.findOne({
+    _id: req.params.visitId,
+    user: friend.id,
+    status: "visited",
+  }).populate<{ place: PopulatedPlace | null }>("place");
+
+  if (!friendVisit || friendVisit.place === null) {
+    throw new Error("Place not found", { cause: { status: 404 } });
+  }
+
+  // One visit per person per place: if I already have it (visited or want to go), stop here
+  const alreadySaved = await Visit.exists({ user: myId, place: friendVisit.place._id });
+  if (alreadySaved) {
+    throw new Error("This place is already in your places", { cause: { status: 409 } });
+  }
+
+  const visit = await Visit.create({
+    user: myId,
+    place: friendVisit.place._id, // the same shared Place, so no duplicate
+    type: friendVisit.type ?? friendVisit.place.type,
+    status: "wantToGo",
+    wantToGoNote: req.body.wantToGoNote ?? "",
+  });
+
+  res.status(201).json({ myVisit: { id: visit._id.toString(), status: visit.status } });
 };
